@@ -1,0 +1,10 @@
+__pycache__/
+venv/
+.venv/
+.env
+*.db
+*.sqlite
+gmail_credentials.json
+gmail_token.json
+logs/*.log
+*.log
