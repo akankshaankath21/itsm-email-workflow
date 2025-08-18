@@ -132,31 +132,31 @@ async def get_gmail_node_emails(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/gmail-nodes/{node_id}/statistics", tags=["Gmail Nodes"])
-async def get_gmail_node_statistics(
-    node_id: UUID,
-    session: AsyncSession = Depends(get_session)
-) -> dict:
-    """Get Gmail node processing statistics."""
-    try:
-        return await gmail_controller.get_gmail_node_statistics(node_id, session)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# @router.get("/gmail-nodes/{node_id}/statistics", tags=["Gmail Nodes"])
+# async def get_gmail_node_statistics(
+#     node_id: UUID,
+#     session: AsyncSession = Depends(get_session)
+# ) -> dict:
+#     """Get Gmail node processing statistics."""
+#     try:
+#         return await gmail_controller.get_gmail_node_statistics(node_id, session)
+#     except ValueError as e:
+#         raise HTTPException(status_code=404, detail=str(e))
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
-@router.post("/gmail-nodes/{node_id}/check", tags=["Gmail Nodes"])
-async def manual_email_check(
-    node_id: UUID,
-    session: AsyncSession = Depends(get_session)
-) -> dict:
-    """Manually trigger an email check for a Gmail node."""
-    try:
-        return await gmail_controller.manual_email_check(node_id, session)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+# @router.post("/gmail-nodes/{node_id}/check", tags=["Gmail Nodes"])
+# async def manual_email_check(
+#     node_id: UUID,
+#     session: AsyncSession = Depends(get_session)
+# ) -> dict:
+#     """Manually trigger an email check for a Gmail node."""
+#     try:
+#         return await gmail_controller.manual_email_check(node_id, session)
+#     except ValueError as e:
+#         raise HTTPException(status_code=400, detail=str(e))
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/gmail-nodes/{node_id}", response_model=SuccessResponse, tags=["Gmail Nodes"])
 async def delete_gmail_node(
@@ -182,75 +182,98 @@ async def execute_mail_classifier(
         return await mail_controller.execute_from_envelope(envelope, session)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+    
+from app.services.workflow_service import WorkflowService
 
+# Initialize workflow service
+workflow_service = WorkflowService()
 
 @router.post("/workflows/gmail-to-classifier/{node_id}", tags=["Workflows"])
 async def execute_gmail_to_classifier_workflow(
     node_id: UUID,
+    max_emails: int = Query(10, ge=1, le=50, description="Maximum emails to process"),
     session: AsyncSession = Depends(get_session)
 ) -> dict:
     """
-    Execute Gmail-to-Classifier workflow for a specific Gmail node.
-    This combines your Gmail node with your friend's classifier.
+    Execute Gmail-to-Classifier workflow with full database persistence.
+    
+    This workflow:
+    1. Gets unprocessed emails from Gmail node
+    2. Classifies each email using AI
+    3. Links classifications to original emails
+    4. Marks emails as processed
+    5. Creates workflow execution record
     """
     try:
-        # Get Gmail node status
-        gmail_status = await gmail_controller.get_gmail_node_status(node_id, session)
-        
-        if not gmail_status.is_active:
-            raise HTTPException(
-                status_code=400, 
-                detail=f"Gmail node '{gmail_status.name}' is not active"
-            )
-        
-        # Get recent unprocessed emails
-        emails = await gmail_controller.get_gmail_node_emails(
-            node_id, session, limit=10, processed_only=False
+        return await workflow_service.execute_gmail_to_classifier_workflow(
+            node_id, session, max_emails
         )
         
-        # Filter unprocessed emails
-        unprocessed_emails = [email for email in emails if not email.is_processed]
-        
-        if not unprocessed_emails:
-            return {
-                "workflow_type": "gmail_to_classifier",
-                "gmail_node": gmail_status.name,
-                "message": "No unprocessed emails found",
-                "emails_processed": 0,
-                "classifications": []
-            }
-        
-        # Process each email through classifier
-        classifications = []
-        for email in unprocessed_emails[:5]:  # Limit to 5 emails per request
-            try:
-                # Create envelope for classifier
-                envelope = EnvelopeIn(data={
-                    "subject": email.subject,
-                    "body": email.body
-                })
-                
-                # Classify email
-                classification_result = await mail_controller.execute_from_envelope(envelope, session)
-                classifications.append(classification_result.data)
-                
-            except Exception as e:
-                print(f"Failed to classify email {email.id}: {str(e)}")
-                continue
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")
+
+@router.get("/workflows/executions/{execution_id}", tags=["Workflows"])
+async def get_workflow_execution(
+    execution_id: UUID,
+    session: AsyncSession = Depends(get_session)
+) -> dict:
+    """Get detailed information about a workflow execution."""
+    try:
+        execution = await workflow_service.get_workflow_execution(execution_id, session)
+        if not execution:
+            raise HTTPException(status_code=404, detail="Workflow execution not found")
         
         return {
-            "workflow_type": "gmail_to_classifier",
-            "gmail_node": gmail_status.name,
-            "emails_found": len(unprocessed_emails),
-            "emails_processed": len(classifications),
-            "classifications": [c.dict() for c in classifications],
-            "execution_timestamp": "2025-08-14T12:00:00Z"
+            "id": str(execution.id),
+            "workflow_type": execution.workflow_type,
+            "status": execution.execution_status,
+            "started_at": execution.started_at.isoformat(),
+            "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
+            "execution_time_ms": execution.execution_time_ms,
+            "input_data": execution.input_data,
+            "output_data": execution.output_data,
+            "error_message": execution.error_message,
+            "gmail_node_id": str(execution.gmail_node_id) if execution.gmail_node_id else None,
+            "raw_email_id": str(execution.raw_email_id) if execution.raw_email_id else None,
+            "email_record_id": str(execution.email_record_id) if execution.email_record_id else None
         }
         
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Workflow execution failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/workflows/executions", tags=["Workflows"])
+async def list_workflow_executions(
+    gmail_node_id: Optional[UUID] = Query(None, description="Filter by Gmail node ID"),
+    limit: int = Query(50, ge=1, le=100, description="Number of executions to return"),
+    session: AsyncSession = Depends(get_session)
+) -> dict:
+    """List workflow executions with optional filtering."""
+    try:
+        executions = await workflow_service.list_workflow_executions(
+            session, gmail_node_id, limit
+        )
+        
+        return {
+            "executions": [
+                {
+                    "id": str(execution.id),
+                    "workflow_type": execution.workflow_type,
+                    "status": execution.execution_status,
+                    "started_at": execution.started_at.isoformat(),
+                    "execution_time_ms": execution.execution_time_ms,
+                    "gmail_node_id": str(execution.gmail_node_id) if execution.gmail_node_id else None
+                }
+                for execution in executions
+            ],
+            "total": len(executions)
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/workflows/status", tags=["Workflows"])
 async def get_workflow_status(

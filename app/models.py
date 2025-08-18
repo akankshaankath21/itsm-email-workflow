@@ -151,6 +151,11 @@ class WorkflowExecution(Base):
     completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
+    # Relationships
+    gmail_node: Mapped[Optional["GmailNode"]] = relationship("GmailNode")
+    raw_email: Mapped[Optional["RawEmail"]] = relationship("RawEmail")
+    email_record: Mapped[Optional["EmailRecord"]] = relationship("EmailRecord")
+
     __table_args__ = (
         Index("ix_workflow_executions_workflow_type", "workflow_type"),
         Index("ix_workflow_executions_execution_status", "execution_status"),
