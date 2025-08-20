@@ -8,3 +8,4 @@ gmail_credentials.json
 gmail_token.json
 logs/*.log
 *.log
+credentials/

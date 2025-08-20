@@ -6,13 +6,11 @@ from pydantic import BaseModel, Field, ValidationError
 from app.config import settings
 
 class LLMClassification(BaseModel):
-    """Validated classification returned by the LLM or the stub."""
     priority: Literal["P1", "P2", "P3"]
     label: str = Field(min_length=1, max_length=128)
     summary: str = Field(min_length=1, max_length=2000)
 
 class LLMClient:
-    """Azure-first JSON-classifier with strict schema and deterministic stub fallback."""
     def __init__(self) -> None:
         self.system_prompt = settings.llm_system_prompt
         self._deployment = settings.azure_openai_deployment
@@ -58,7 +56,7 @@ class LLMClient:
                 schema = self._json_schema()
 
                 def _call() -> dict:
-                    return self._azure_client.chat.completions.create(  # type: ignore[union-attr]
+                    return self._azure_client.chat.completions.create(
                         model=self._deployment,
                         temperature=0,
                         response_format=schema,

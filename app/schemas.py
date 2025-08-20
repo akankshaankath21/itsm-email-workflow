@@ -4,23 +4,19 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, EmailStr, constr
 
 class EnvelopeData(BaseModel):
-    """Subset of envelope payload used by the mail classifier node."""
     subject: Optional[constr(max_length=500)] = Field(default=None)
     body: constr(min_length=1, max_length=20000)
 
 class EnvelopeIn(BaseModel):
-    """Incoming Gmail trigger envelope; extra keys are ignored."""
     model_config = ConfigDict(extra="ignore")
     data: EnvelopeData
 
 class ClassificationOut(BaseModel):
-    """Classifier output."""
     priority: Literal["P1", "P2", "P3"]
     label: constr(min_length=1, max_length=128)
     summary: constr(min_length=1, max_length=2000)
 
 class ExecuteResponse(BaseModel):
-    """HTTP response wrapper for mail classifier."""
     data: ClassificationOut
 
 
@@ -48,7 +44,7 @@ class GmailNodeOut(BaseModel):
     email_address: str
     is_active: bool
     
-    # Configuration
+
     filter_sender: Optional[str]
     filter_subject_contains: Optional[str]
     only_unread: bool
@@ -56,12 +52,12 @@ class GmailNodeOut(BaseModel):
     polling_interval: int
     max_results: int
     
-    # Statistics
+
     emails_processed: int
     last_checked: Optional[datetime]
     last_email_received: Optional[datetime]
     
-    # Metadata
+
     created_at: datetime
     updated_at: datetime
 
@@ -79,7 +75,6 @@ class GmailNodeStatusOut(BaseModel):
     last_checked: Optional[datetime]
     last_email_received: Optional[datetime]
     
-    # Configuration summary
     polling_interval: int
     active_filters: List[str]  # Human-readable list of active filters
     

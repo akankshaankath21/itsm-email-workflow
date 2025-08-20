@@ -12,15 +12,10 @@ import logging
 from app.nodes.base import BaseNode
 
 class GmailTriggerNode(BaseNode):
-    """
-    Gmail-specific trigger node that monitors Gmail for new emails.
-    Adapted from your original GmailNode to work with service architecture.
-    """
     
-    # Gmail API scopes - what permissions we need
     SCOPES = [
-        'https://www.googleapis.com/auth/gmail.readonly',  # Read emails
-        'https://www.googleapis.com/auth/gmail.modify'     # Mark as read
+        'https://www.googleapis.com/auth/gmail.readonly',
+        'https://www.googleapis.com/auth/gmail.modify'
     ]
     
     def __init__(
@@ -37,39 +32,36 @@ class GmailTriggerNode(BaseNode):
         polling_interval: int = 30,
         max_results: int = 10
     ):
-        """Initialize Gmail trigger node with configuration."""
+
         super().__init__(id=node_id, name=name, type="trigger")
         
-        # Gmail configuration
+
         self.email_address = email_address
         self.credentials_file_path = credentials_file_path
         self.token_file_path = token_file_path or "gmail_token.json"
         
-        # Filtering configuration
+
         self.filter_sender = filter_sender
         self.filter_subject_contains = filter_subject_contains
         self.only_unread = only_unread
         self.mark_as_read = mark_as_read
         
-        # Polling configuration
+
         self.polling_interval = polling_interval
         self.max_results = max_results
         
-        # Gmail API objects
+
         self.credentials = None
         self.gmail_service = None
         
-        # State tracking
+
         self.last_checked = None
         
-        # Logging
+
         self.logger = logging.getLogger(f"GmailTriggerNode_{self.id}")
     
     async def start(self) -> bool:
-        """
-        Start the Gmail node by authenticating with Gmail API.
-        This replaces your old authenticate + start logic.
-        """
+
         try:
             self.logger.info(f"Starting Gmail trigger node '{self.name}'")
             
@@ -89,19 +81,13 @@ class GmailTriggerNode(BaseNode):
             return False
     
     async def stop(self) -> None:
-        """Stop the Gmail node and cleanup."""
+
         self.isActive = False
         await self.disconnect()
         self.logger.info(f"Gmail trigger node '{self.name}' stopped")
     
     async def execute_once(self) -> List[Dict[str, Any]]:
-        """
-        Execute one email checking cycle.
-        This replaces your old on_execute method but returns emails instead of setting output.
-        
-        Returns:
-            List of new emails found in standardized format
-        """
+
         if not self.isActive:
             self.logger.warning(f"Attempted to execute inactive node '{self.name}'")
             return []
@@ -125,13 +111,13 @@ class GmailTriggerNode(BaseNode):
                     # Apply filters
                     if self._should_process_email(parsed_email):
                         parsed_emails.append(parsed_email)
-                        self.logger.info(f"✅ Email accepted: '{parsed_email['subject']}' from {parsed_email['from']}")
+                        self.logger.info(f"Email accepted: '{parsed_email['subject']}' from {parsed_email['from']}")
                         
                         # Mark as read if configured
                         if self.mark_as_read:
                             await self.mark_email_as_read(raw_email)
                     else:
-                        self.logger.debug(f"❌ Email filtered out: '{parsed_email['subject']}' from {parsed_email['from']}")
+                        self.logger.debug(f"Email filtered out: '{parsed_email['subject']}' from {parsed_email['from']}")
                         
                 except Exception as e:
                     self.logger.error(f"Failed to parse email: {str(e)}")
@@ -145,10 +131,7 @@ class GmailTriggerNode(BaseNode):
             return []
     
     async def authenticate(self) -> bool:
-        """
-        Authenticate with Gmail using OAuth2.
-        This is your existing authentication logic.
-        """
+
         try:
             self.logger.info("Starting Gmail authentication...")
             
@@ -196,16 +179,13 @@ class GmailTriggerNode(BaseNode):
             return False
     
     async def disconnect(self) -> None:
-        """Clean up Gmail connection."""
+
         self.gmail_service = None
         self.credentials = None
         self.logger.info("Gmail connection cleaned up")
     
     async def fetch_new_emails(self) -> List[Any]:
-        """
-        Fetch new emails from Gmail.
-        This is your existing fetch logic.
-        """
+
         if not self.gmail_service:
             self.logger.error("Gmail service not initialized")
             return []
@@ -273,24 +253,21 @@ class GmailTriggerNode(BaseNode):
             return []
     
     async def parse_email(self, raw_email: Any) -> Dict[str, Any]:
-        """
-        Parse Gmail message into standardized format.
-        This is your existing parsing logic.
-        """
+
         try:
-            # Extract headers
+
             headers = {}
             for header in raw_email['payload'].get('headers', []):
                 headers[header['name'].lower()] = header['value']
             
-            # Extract body
+
             body = self._extract_body_from_payload(raw_email['payload'])
             
-            # Check if message is read
+
             label_ids = raw_email.get('labelIds', [])
             is_read = 'UNREAD' not in label_ids
             
-            # Convert internal date (milliseconds) to ISO format
+
             internal_date = int(raw_email['internalDate'])
             received_at = datetime.fromtimestamp(internal_date / 1000).isoformat() + 'Z'
             
@@ -314,7 +291,7 @@ class GmailTriggerNode(BaseNode):
             
         except Exception as e:
             self.logger.error(f"Failed to parse Gmail message: {str(e)}")
-            # Return minimal data to prevent complete failure
+
             return {
                 "id": raw_email.get('id', 'unknown'),
                 "thread_id": raw_email.get('threadId', 'unknown'),
@@ -330,23 +307,20 @@ class GmailTriggerNode(BaseNode):
             }
     
     def _extract_body_from_payload(self, payload: Dict[str, Any]) -> str:
-        """
-        Extract email body from Gmail message payload.
-        This is your existing body extraction logic.
-        """
+
         body = ""
         
         try:
-            # If payload has body data directly
+
             if 'body' in payload and 'data' in payload['body']:
                 body_data = payload['body']['data']
                 body = base64.urlsafe_b64decode(body_data).decode('utf-8')
                 return body
             
-            # If payload has parts (multipart message)
+
             if 'parts' in payload:
                 for part in payload['parts']:
-                    # Look for text/plain or text/html parts
+
                     mime_type = part.get('mimeType', '')
                     
                     if mime_type == 'text/plain' and 'data' in part.get('body', {}):
@@ -354,7 +328,7 @@ class GmailTriggerNode(BaseNode):
                         body = base64.urlsafe_b64decode(body_data).decode('utf-8')
                         break
                     elif mime_type == 'text/html' and 'data' in part.get('body', {}):
-                        # Prefer plain text, but use HTML if no plain text found
+
                         if not body:
                             body_data = part['body']['data']
                             body = base64.urlsafe_b64decode(body_data).decode('utf-8')
@@ -366,40 +340,34 @@ class GmailTriggerNode(BaseNode):
         return body
     
     def _should_process_email(self, parsed_email: Dict[str, Any]) -> bool:
-        """
-        Check if email matches the configured filters.
-        Updated with your debug logging and fixed sender matching.
-        """
-        # Extract email address from "Display Name <email@domain.com>" format
+
+
         from_email = parsed_email["from"]
         if "<" in from_email and ">" in from_email:
             from_email = from_email.split("<")[1].split(">")[0].strip()
         
-        self.logger.debug(f"🔍 Checking email from '{from_email}' with subject '{parsed_email['subject']}'")
+        self.logger.debug(f"Checking email from '{from_email}' with subject '{parsed_email['subject']}'")
         
-        # Check sender filter
+
         if self.filter_sender and from_email != self.filter_sender:
-            self.logger.debug(f"❌ Email filtered out - sender '{from_email}' doesn't match filter '{self.filter_sender}'")
+            self.logger.debug(f"Email filtered out - sender '{from_email}' doesn't match filter '{self.filter_sender}'")
             return False
         
-        # Check subject filter
+
         if (self.filter_subject_contains and 
             self.filter_subject_contains.lower() not in parsed_email["subject"].lower()):
-            self.logger.debug(f"❌ Email filtered out - subject '{parsed_email['subject']}' doesn't contain '{self.filter_subject_contains}'")
+            self.logger.debug(f"Email filtered out - subject '{parsed_email['subject']}' doesn't contain '{self.filter_subject_contains}'")
             return False
         
-        self.logger.debug("✅ Email passed all filters!")
+        self.logger.debug("Email passed all filters!")
         return True
     
     async def mark_email_as_read(self, raw_email: Any) -> bool:
-        """
-        Mark Gmail message as read.
-        This is your existing mark-as-read logic.
-        """
+
         try:
             message_id = raw_email['id']
             
-            # Remove UNREAD label to mark as read
+
             self.gmail_service.users().messages().modify(
                 userId='me',
                 id=message_id,
@@ -413,12 +381,12 @@ class GmailTriggerNode(BaseNode):
             self.logger.error(f"Failed to mark email as read: {str(e)}")
             return False
     
-    # BaseNode abstract method implementation
+
     async def execute(self) -> Any:
-        """Execute method required by BaseNode interface."""
+
         emails = await self.execute_once()
         if emails:
-            # Set output for compatibility with base node interface
+
             self.setOutput({
                 "trigger": "new_email",
                 "timestamp": datetime.utcnow().isoformat(),
