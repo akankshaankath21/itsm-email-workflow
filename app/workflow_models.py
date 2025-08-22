@@ -14,22 +14,17 @@ class WorkflowTemplate(Base):
     description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     version: Mapped[str] = mapped_column(String(50), default="1.0.0")
     
-    # Workflow metadata
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     category: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     
-    # Execution settings
     max_concurrent_instances: Mapped[int] = mapped_column(Integer, default=5)
     timeout_minutes: Mapped[int] = mapped_column(Integer, default=30)
     
-    # UI Layout information
     ui_layout: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)
     
-    # Audit fields
     created_by: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
-
 
     nodes: Mapped[List["WorkflowNode"]] = relationship("WorkflowNode", back_populates="workflow_template", cascade="all, delete-orphan")
     edges: Mapped[List["WorkflowEdge"]] = relationship("WorkflowEdge", back_populates="workflow_template", cascade="all, delete-orphan")
@@ -46,8 +41,6 @@ class WorkflowNode(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     workflow_template_id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), ForeignKey("workflow_templates.id"), nullable=False)
-    
-    # Node identification
     node_key: Mapped[str] = mapped_column(String(100), nullable=False)
     node_type: Mapped[Literal["trigger", "action"]] = mapped_column(Enum("trigger", "action", name="node_type_enum"), nullable=False)
     node_class: Mapped[str] = mapped_column(String(255), nullable=False)

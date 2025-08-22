@@ -12,7 +12,6 @@ import logging
 from app.nodes.base import BaseNode
 
 class GmailTriggerNode(BaseNode):
-    
     SCOPES = [
         'https://www.googleapis.com/auth/gmail.readonly',
         'https://www.googleapis.com/auth/gmail.modify'
@@ -32,24 +31,19 @@ class GmailTriggerNode(BaseNode):
         polling_interval: int = 30,
         max_results: int = 10
     ):
-
         super().__init__(id=node_id, name=name, type="trigger")
-        
 
         self.email_address = email_address
         self.credentials_file_path = credentials_file_path
         self.token_file_path = token_file_path or "gmail_token.json"
-        
 
         self.filter_sender = filter_sender
         self.filter_subject_contains = filter_subject_contains
         self.only_unread = only_unread
         self.mark_as_read = mark_as_read
-        
 
         self.polling_interval = polling_interval
         self.max_results = max_results
-        
 
         self.credentials = None
         self.gmail_service = None

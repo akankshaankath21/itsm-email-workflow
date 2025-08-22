@@ -39,7 +39,6 @@ class WorkflowService:
         start_time = datetime.now(timezone.utc)
         
         try:
-            # 1. Create workflow execution record
             workflow_execution = WorkflowExecution(
                 id=uuid4(),
                 workflow_type="gmail_to_classifier",

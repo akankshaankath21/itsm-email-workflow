@@ -9,10 +9,7 @@ from app.schemas import (
 from app.services.gmail_service import GmailService
 
 class GmailController:
-    """
-    Controller that handles Gmail node HTTP requests.
-    Follows the same pattern as your friend's MailController.
-    """
+    """Controller that handles Gmail node HTTP requests."""
     
     def __init__(self) -> None:
         self.service = GmailService()

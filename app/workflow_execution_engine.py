@@ -9,16 +9,14 @@ from sqlalchemy.orm import selectinload
 from app.workflow_models import (
     WorkflowTemplate, WorkflowNode, WorkflowEdge, WorkflowInstance, NodeExecution
 )
-
+from app.db import async_session_factory  # ← Import session factory
 from app.services.gmail_service import GmailService
 from app.services.classifier_service import ClassifierService
 from app.models import GmailNode, EmailRecord
 from app.schemas import EnvelopeIn, EnvelopeData
 
 class WorkflowExecutionEngine:
-    
     def __init__(self):
-        # Use your existing services instead of creating new nodes
         self.gmail_service = GmailService()
         self.classifier_service = ClassifierService()
         self.running_workflows: Dict[UUID, asyncio.Task] = {}
@@ -32,7 +30,6 @@ class WorkflowExecutionEngine:
     ) -> UUID:
         """Execute a workflow template and return the instance ID"""
         
-        # Load workflow template
         workflow_template = await self._load_workflow_template(template_id, session)
         if not workflow_template:
             raise ValueError(f"Workflow template {template_id} not found")
@@ -40,7 +37,6 @@ class WorkflowExecutionEngine:
         if not workflow_template.is_active:
             raise ValueError(f"Workflow template '{workflow_template.name}' is not active")
         
-        # Create workflow instance
         workflow_instance = WorkflowInstance(
             id=uuid4(),
             workflow_template_id=template_id,
@@ -53,42 +49,45 @@ class WorkflowExecutionEngine:
         await session.commit()
         await session.refresh(workflow_instance)
         
-        # Start async execution
+        # Start async execution with NEW session
         task = asyncio.create_task(
-            self._execute_workflow_async(workflow_instance.id, session)
+            self._execute_workflow_async(workflow_instance.id)
         )
         self.running_workflows[workflow_instance.id] = task
         
         return workflow_instance.id
     
-    async def _execute_workflow_async(self, instance_id: UUID, session: AsyncSession) -> None:
-        """Async execution of a workflow instance"""
-        try:
-            # Mark as running
-            await self._update_workflow_status(instance_id, "running", session)
-            
-            # Load workflow instance with template
-            workflow_instance = await self._load_workflow_instance(instance_id, session)
-            if not workflow_instance:
-                raise ValueError(f"Workflow instance {instance_id} not found")
-            
-            template = workflow_instance.workflow_template
-            
-            # Build execution graph
-            execution_graph = self._build_execution_graph(template)
-            
-            # Execute nodes in order
-            await self._execute_nodes_in_order(workflow_instance, execution_graph, session)
-            
-            # Mark as completed
-            await self._update_workflow_status(instance_id, "completed", session)
-            
-        except Exception as e:
-            await self._update_workflow_status(instance_id, "failed", session, error_message=str(e))
-            raise
-        finally:
-            if instance_id in self.running_workflows:
-                del self.running_workflows[instance_id]
+    async def _execute_workflow_async(self, instance_id: UUID) -> None:
+        """Async execution of a workflow instance with its own session"""
+        
+        # Create our own database session for background task
+        async with async_session_factory() as session:
+            try:
+                # Mark as running
+                await self._update_workflow_status(instance_id, "running", session)
+                
+                # Load workflow instance with template
+                workflow_instance = await self._load_workflow_instance(instance_id, session)
+                if not workflow_instance:
+                    raise ValueError(f"Workflow instance {instance_id} not found")
+                
+                template = workflow_instance.workflow_template
+                
+                # Build execution graph
+                execution_graph = self._build_execution_graph(template)
+                
+                # Execute nodes in order
+                await self._execute_nodes_in_order(workflow_instance, execution_graph, session)
+                
+                # Mark as completed
+                await self._update_workflow_status(instance_id, "completed", session)
+                
+            except Exception as e:
+                await self._update_workflow_status(instance_id, "failed", session, error_message=str(e))
+                raise
+            finally:
+                if instance_id in self.running_workflows:
+                    del self.running_workflows[instance_id]
     
     def _build_execution_graph(self, template: WorkflowTemplate) -> Dict[str, Any]:
         """Build execution graph from workflow template"""
@@ -392,42 +391,47 @@ class WorkflowExecutionEngine:
         )
         await session.commit()
     
-    async def get_workflow_status(self, instance_id: UUID, session: AsyncSession) -> Optional[Dict[str, Any]]:
-        """Get detailed workflow execution status"""
-        result = await session.execute(
-            select(WorkflowInstance)
-            .options(
-                selectinload(WorkflowInstance.node_executions).selectinload(NodeExecution.workflow_node)
+    # ✅ FIX: Backward compatible method that handles both calling patterns
+    async def get_workflow_status(self, instance_id: UUID, session: AsyncSession = None) -> Optional[Dict[str, Any]]:
+        """Get detailed workflow execution status using its own session"""
+        
+        # ✅ Always use our own session to avoid context conflicts (ignore passed session)
+        async with async_session_factory() as session:
+            result = await session.execute(
+                select(WorkflowInstance)
+                .options(
+                    selectinload(WorkflowInstance.node_executions).selectinload(NodeExecution.workflow_node),
+                    selectinload(WorkflowInstance.workflow_template)
+                )
+                .where(WorkflowInstance.id == instance_id)
             )
-            .where(WorkflowInstance.id == instance_id)
-        )
-        workflow_instance = result.scalar_one_or_none()
-        
-        if not workflow_instance:
-            return None
-        
-        node_statuses = []
-        for execution in workflow_instance.node_executions:
-            node_statuses.append({
-                "node_key": execution.workflow_node.node_key,
-                "node_name": execution.workflow_node.name,
-                "status": execution.status,
-                "started_at": execution.started_at.isoformat() if execution.started_at else None,
-                "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
-                "duration_ms": execution.duration_ms,
-                "error_message": execution.error_message
-            })
-        
-        return {
-            "instance_id": str(workflow_instance.id),
-            "template_name": workflow_instance.workflow_template.name,
-            "status": workflow_instance.status,
-            "started_at": workflow_instance.started_at.isoformat() if workflow_instance.started_at else None,
-            "completed_at": workflow_instance.completed_at.isoformat() if workflow_instance.completed_at else None,
-            "error_message": workflow_instance.error_message,
-            "nodes": node_statuses,
-            "is_running": instance_id in self.running_workflows
-        }
+            workflow_instance = result.scalar_one_or_none()
+            
+            if not workflow_instance:
+                return None
+            
+            node_statuses = []
+            for execution in workflow_instance.node_executions:
+                node_statuses.append({
+                    "node_key": execution.workflow_node.node_key,
+                    "node_name": execution.workflow_node.name,
+                    "status": execution.status,
+                    "started_at": execution.started_at.isoformat() if execution.started_at else None,
+                    "completed_at": execution.completed_at.isoformat() if execution.completed_at else None,
+                    "duration_ms": execution.duration_ms,
+                    "error_message": execution.error_message
+                })
+            
+            return {
+                "instance_id": str(workflow_instance.id),
+                "template_name": workflow_instance.workflow_template.name if workflow_instance.workflow_template else "Unknown",
+                "status": workflow_instance.status,
+                "started_at": workflow_instance.started_at.isoformat() if workflow_instance.started_at else None,
+                "completed_at": workflow_instance.completed_at.isoformat() if workflow_instance.completed_at else None,
+                "error_message": workflow_instance.error_message,
+                "nodes": node_statuses,
+                "is_running": instance_id in self.running_workflows
+            }
 
 # Global execution engine instance
 workflow_engine = WorkflowExecutionEngine()

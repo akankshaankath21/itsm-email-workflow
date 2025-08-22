@@ -23,7 +23,6 @@ class EmailRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=lambda: datetime.now(timezone.utc))
 
-    # Relationship to raw email
     raw_email: Mapped[Optional["RawEmail"]] = relationship("RawEmail", back_populates="classifications")
 
     __table_args__ = (
@@ -36,18 +35,15 @@ class GmailNode(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(PGUUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    
 
     email_address: Mapped[str] = mapped_column(String(255), nullable=False)
     credentials_file_path: Mapped[str] = mapped_column(String(500), nullable=False)
     token_file_path: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    
 
     filter_sender: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     filter_subject_contains: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     only_unread: Mapped[bool] = mapped_column(Boolean, default=True)
     mark_as_read: Mapped[bool] = mapped_column(Boolean, default=False)
-    
 
     polling_interval: Mapped[int] = mapped_column(Integer, default=30)
     max_results: Mapped[int] = mapped_column(Integer, default=10)

@@ -313,11 +313,11 @@ class GmailService:
                     await asyncio.sleep(trigger_node.polling_interval)
                     
                 except Exception as e:
-                    print(f"Error in polling loop for node {node_id}: {str(e)}")
-                    await asyncio.sleep(60)  # Wait 1 minute before retrying
+                    import logging
+                    logging.getLogger(__name__).error(f"Error in polling loop for node {node_id}: {str(e)}")
+                    await asyncio.sleep(60)
                     
         except asyncio.CancelledError:
-            # Clean shutdown
             await trigger_node.stop()
             raise
     
@@ -337,7 +337,7 @@ class GmailService:
                 )
             )
             if existing.scalar_one_or_none():
-                continue  # Skip duplicate
+                continue
             
             # Create new raw email record
             raw_email = RawEmail(

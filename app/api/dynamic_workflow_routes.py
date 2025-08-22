@@ -3,9 +3,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, Body
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel, Field
-
-from app.db import get_session
+from app.db import get_session, async_session_factory
 from app.services.dynamic_workflow_service import DynamicWorkflowService
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+from app.workflow_models import WorkflowTemplate, WorkflowInstance
+
 from app.services.gmail_service import GmailService
 
 workflow_service = DynamicWorkflowService()
@@ -42,7 +45,6 @@ async def create_workflow_template(
     request: CreateWorkflowTemplateRequest,
     session: AsyncSession = Depends(get_session)
 ) -> Dict[str, str]:
-
     try:
         template = await workflow_service.create_workflow_template(
             name=request.name,
@@ -219,7 +221,6 @@ async def execute_workflow(
     request: ExecuteWorkflowRequest,
     session: AsyncSession = Depends(get_session)
 ) -> Dict[str, str]:
-
     try:
         instance_id = await workflow_service.execute_workflow_template(
             template_id=template_id,
@@ -457,24 +458,47 @@ async def get_existing_gmail_nodes(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-
 @workflow_router.get("/integration/status")
-async def get_integration_status(
-    session: AsyncSession = Depends(get_session)
-) -> Dict[str, Any]:
-
+async def get_integration_status() -> Dict[str, Any]:
+    """
+    ✅ FIX: Removed session dependency to avoid context conflicts
+    Each service call will use its own session
+    """
+    
     try:
-        # Check existing Gmail nodes
-        gmail_nodes = await gmail_service.list_gmail_nodes(session)
-        active_gmail_nodes = [node for node in gmail_nodes if node.is_active]
-        
-        # Check existing templates
-        templates = await workflow_service.list_workflow_templates(session)
-        
-        # Check existing instances
-        instances = await workflow_service.list_workflow_instances(session, limit=10)
-        running_instances = [inst for inst in instances if inst.status in ["pending", "running"]]
+        # ✅ Each service call creates its own session context
+        async with async_session_factory() as session:
+            # Check existing Gmail nodes
+            gmail_nodes = await gmail_service.list_gmail_nodes(session)
+            active_gmail_nodes = [node for node in gmail_nodes if node.is_active]
+            
+            # Check existing templates with eager loading
+            templates_query = select(WorkflowTemplate).options(
+                selectinload(WorkflowTemplate.nodes),
+                selectinload(WorkflowTemplate.edges)
+            ).order_by(WorkflowTemplate.created_at.desc())
+            
+            templates_result = await session.execute(templates_query)
+            templates = templates_result.scalars().all()
+            
+            # Check existing instances with eager loading
+            instances_query = select(WorkflowInstance).options(
+                selectinload(WorkflowInstance.workflow_template)
+            ).order_by(WorkflowInstance.created_at.desc()).limit(10)
+            
+            instances_result = await session.execute(instances_query)
+            instances = instances_result.scalars().all()
+            running_instances = [inst for inst in instances if inst.status in ["pending", "running"]]
+            
+            # ✅ FIX: Access all lazy-loaded attributes while session is active
+            template_data = []
+            for template in templates[:5]:
+                template_data.append({
+                    "id": str(template.id),
+                    "name": template.name,
+                    "active": template.is_active,
+                    "nodes": len(template.nodes)  # ← Access nodes while session is active
+                })
         
         return {
             "integration_status": "fully_connected",
@@ -520,15 +544,7 @@ async def get_integration_status(
                     "Error handling and retries",
                     "Service integration"
                 ],
-                "templates": [
-                    {
-                        "id": str(template.id),
-                        "name": template.name,
-                        "active": template.is_active,
-                        "nodes": len(template.nodes) if hasattr(template, 'nodes') else 0
-                    }
-                    for template in templates[:5]
-                ]
+                "templates": template_data
             },
             "capabilities": {
                 "can_create_workflows": len(gmail_nodes) > 0,

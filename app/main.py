@@ -32,7 +32,6 @@ async def lifespan(app: FastAPI):
         logger.info("Shutting down ITSM Workflow Automation API...")
 
 def create_app() -> FastAPI:
-    
     app = FastAPI(
         title=settings.app_name,
         description="ITSM Workflow Automation Platform",
@@ -41,7 +40,6 @@ def create_app() -> FastAPI:
         docs_url="/docs",
         redoc_url="/redoc"
     )
-    
 
     app.add_middleware(
         CORSMiddleware,
@@ -59,18 +57,15 @@ def create_app() -> FastAPI:
             "app": settings.app_name,
             "workflow_support": "static_and_dynamic"
         }
-    
 
     app.include_router(
         core_router, 
-        prefix="/api",
-
+        prefix="/api"
     )
     
     app.include_router(
         workflow_router, 
-        prefix="/api",
-
+        prefix="/api"
     )
     
     @app.get("/")
@@ -86,17 +81,7 @@ def create_app() -> FastAPI:
                 "core_api": "/api",
                 "dynamic_workflows": "/api"
             },
-            "demo_flow": {
-                "step_1": "Create Gmail node: POST /api/nodes/gmail",
-                "step_2": "Start monitoring: POST /api/nodes/gmail/{id}/start", 
-                "step_3": "Test classifier: POST /api/nodes/classifier/execute",
-                "step_4": "Run static workflow: POST /api/workflows/static/gmail-to-classifier/{id}",
-                "step_5": "Create dynamic template: POST /api/templates",
-                "step_6": "Add nodes to template: POST /api/templates/{id}/nodes",
-                "step_7": "Connect nodes: POST /api/templates/{id}/edges",
-                "step_8": "Execute dynamic workflow: POST /api/templates/{id}/execute",
-                "step_9": "Monitor execution: GET /api/instances/{id}/status"
-            },
+
             "features": [
                 "Gmail Email Monitoring (OAuth)",
                 "AI Email Classification (Azure OpenAI)", 

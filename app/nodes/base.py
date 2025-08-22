@@ -1,8 +1,6 @@
 from typing import Any, Literal
 
-
 class BaseNode:
-
     def __init__(self, id: str, name: str, type: Literal["trigger", "action"]) -> None:
         self.id = id
         self.name = name

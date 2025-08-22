@@ -30,7 +30,6 @@ async def create_gmail_node(
     config: GmailNodeConfigIn,
     session: AsyncSession = Depends(get_session)
 ) -> GmailNodeOut:
-
     try:
         return await gmail_controller.create_gmail_node(config, session)
     except RuntimeError as e:
@@ -43,7 +42,6 @@ async def list_gmail_nodes(
     active_only: bool = Query(False, description="Only return active Gmail nodes"),
     session: AsyncSession = Depends(get_session)
 ) -> List[GmailNodeOut]:
-
     try:
         return await gmail_controller.list_gmail_nodes(session, active_only)
     except Exception as e:
@@ -54,7 +52,6 @@ async def get_gmail_node(
     node_id: UUID,
     session: AsyncSession = Depends(get_session)
 ) -> GmailNodeOut:
-
     try:
         return await gmail_controller.get_gmail_node(node_id, session)
     except ValueError as e:
@@ -67,7 +64,6 @@ async def start_gmail_node(
     node_id: UUID,
     session: AsyncSession = Depends(get_session)
 ) -> SuccessResponse:
-
     try:
         return await gmail_controller.start_gmail_node(node_id, session)
     except ValueError as e:
@@ -82,7 +78,6 @@ async def stop_gmail_node(
     node_id: UUID,
     session: AsyncSession = Depends(get_session)
 ) -> SuccessResponse:
-
     try:
         return await gmail_controller.stop_gmail_node(node_id, session)
     except ValueError as e:
@@ -95,7 +90,6 @@ async def get_gmail_node_status(
     node_id: UUID,
     session: AsyncSession = Depends(get_session)
 ) -> GmailNodeStatusOut:
-
     try:
         return await gmail_controller.get_gmail_node_status(node_id, session)
     except ValueError as e:
@@ -110,7 +104,6 @@ async def get_gmail_node_emails(
     processed_only: bool = Query(False, description="Only return processed emails"),
     session: AsyncSession = Depends(get_session)
 ) -> List[RawEmailOut]:
-
     try:
         return await gmail_controller.get_gmail_node_emails(
             node_id, session, limit, processed_only
@@ -125,7 +118,6 @@ async def execute_mail_classifier(
     envelope: EnvelopeIn, 
     session: AsyncSession = Depends(get_session)
 ) -> ExecuteResponse:
-
     try:
         return await mail_controller.execute_from_envelope(envelope, session)
     except Exception as e:
@@ -139,7 +131,6 @@ async def execute_gmail_to_classifier_workflow(
     max_emails: int = Query(10, ge=1, le=50, description="Maximum emails to process"),
     session: AsyncSession = Depends(get_session)
 ) -> dict:
-
     try:
         return await workflow_service.execute_gmail_to_classifier_workflow(
             node_id, session, max_emails
@@ -154,7 +145,6 @@ async def get_static_workflow_execution(
     execution_id: UUID,
     session: AsyncSession = Depends(get_session)
 ) -> dict:
-
     try:
         execution = await workflow_service.get_workflow_execution(execution_id, session)
         if not execution:
@@ -185,7 +175,6 @@ async def list_static_workflow_executions(
     limit: int = Query(50, ge=1, le=100, description="Number of executions to return"),
     session: AsyncSession = Depends(get_session)
 ) -> dict:
-
     try:
         executions = await workflow_service.list_workflow_executions(
             session, gmail_node_id, limit
@@ -214,7 +203,6 @@ async def list_static_workflow_executions(
 async def get_system_status(
     session: AsyncSession = Depends(get_session)
 ) -> dict:
-
     try:
         gmail_nodes = await gmail_controller.list_gmail_nodes(session)
         active_gmail_nodes = [node for node in gmail_nodes if node.is_active]

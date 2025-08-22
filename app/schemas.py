@@ -27,14 +27,12 @@ class GmailNodeConfigIn(BaseModel):
     credentials_file_path: constr(min_length=1, max_length=500)
     token_file_path: Optional[constr(max_length=500)] = "gmail_token.json"
     
-    # Filtering options
     filter_sender: Optional[EmailStr] = None
     filter_subject_contains: Optional[constr(max_length=255)] = None
     only_unread: bool = True
     mark_as_read: bool = False
     
-    # Polling configuration
-    polling_interval: int = Field(ge=5, le=3600, default=30)  # 5 seconds to 1 hour
+    polling_interval: int = Field(ge=5, le=3600, default=30)
     max_results: int = Field(ge=1, le=100, default=10)
 
 class GmailNodeOut(BaseModel):
@@ -43,7 +41,6 @@ class GmailNodeOut(BaseModel):
     name: str
     email_address: str
     is_active: bool
-    
 
     filter_sender: Optional[str]
     filter_subject_contains: Optional[str]

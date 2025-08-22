@@ -8,13 +8,11 @@ engine = create_async_engine(
     future=True
 )
 
-
 async_session_factory = async_sessionmaker(
     engine,
     class_=AsyncSession,
     expire_on_commit=False
 )
-
 
 class Base(DeclarativeBase):
     pass
@@ -26,7 +24,6 @@ async def get_session() -> AsyncSession:
         finally:
             await session.close()
 
-
 async def init_models() -> None:
     async with engine.begin() as conn:
         from app.models import GmailNode, RawEmail, EmailRecord, WorkflowExecution
@@ -37,4 +34,3 @@ async def init_models() -> None:
         )
         
         await conn.run_sync(Base.metadata.create_all)
-        print("Database tables created successfully")
